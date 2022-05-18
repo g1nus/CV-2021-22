@@ -1,3 +1,4 @@
+from turtle import right
 import cv2
 import time
 import numpy as np
@@ -34,6 +35,8 @@ kps, dsc = sift.detectAndCompute(frame, None)
 frame = cv2.drawKeypoints(gray_frame, kps, frame, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 points2f = cv2.KeyPoint.convert(kps)
 corners_predicted = points2f
+n_kp = len(points2f)
+print(f"initially detected: {n_kp}")
 
 while video.isOpened():
     prev_frame = frame.copy()
@@ -43,15 +46,26 @@ while video.isOpened():
     frame = cv2.resize(frame, (int(WIDTH/5), int(HEIGHT/5)))
 
     corners_predicted, status_predicted, err = cv2.calcOpticalFlowPyrLK(prev_frame, frame, prev_corners, None)
-    
-    for item in list(corners_predicted.astype(int)):
+    loss_points = {"right": 0, "left": 0, "top": 0, "bottom": 0, "total": 0}
+    for idx, item in enumerate(corners_predicted.astype(int)):
         x, y = item
         x = int(x)
         y = int(y)
+        if x > int(WIDTH/5):
+            loss_points["right"] += 1
+        elif x < 0:
+            loss_points["left"] += 1
+        elif y > int(HEIGHT/5):
+            loss_points["bottom"] += 1
+        elif y < 0:
+            loss_points["top"] += 1
         cv2.circle(frame, (x, y), 6, (0, 255, 0), 1)
 
     # Displaying the image
     cv2.imshow("Video", frame)
+    
+    loss_points["total"] = loss_points["right"] + loss_points["left"] + loss_points["top"] + loss_points["bottom"]
+    print(f"there are currently {len(corners_predicted) - loss_points['total']} corners predicted, lost : {loss_points['total']} (R: {loss_points['right']} - L: {loss_points['left']} - U: {loss_points['top']} - D: {loss_points['bottom']})")
 
     if cv2.waitKey(1) == ord('q') or not ret:
         break
