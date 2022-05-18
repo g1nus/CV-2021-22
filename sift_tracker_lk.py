@@ -33,10 +33,8 @@ gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 #detect keypoints and draw them on screen
 kps, dsc = sift.detectAndCompute(frame, None)
 frame = cv2.drawKeypoints(gray_frame, kps, frame, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-points2f = cv2.KeyPoint.convert(kps)
-corners_predicted = points2f
-n_kp = len(points2f)
-print(f"initially detected: {n_kp}")
+corners_predicted = cv2.KeyPoint.convert(kps)
+print(f"initially detected: {len(corners_predicted)}")
 
 while video.isOpened():
     prev_frame = frame.copy()
@@ -65,7 +63,12 @@ while video.isOpened():
     cv2.imshow("Video", frame)
     
     loss_points["total"] = loss_points["right"] + loss_points["left"] + loss_points["top"] + loss_points["bottom"]
-    print(f"there are currently {len(corners_predicted) - loss_points['total']} corners predicted, lost : {loss_points['total']} (R: {loss_points['right']} - L: {loss_points['left']} - U: {loss_points['top']} - D: {loss_points['bottom']})")
+
+    if(loss_points["total"] > len(corners_predicted)/2):
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        #detect keypoints
+        kps, dsc = sift.detectAndCompute(frame, None)
+        corners_predicted = cv2.KeyPoint.convert(kps)
 
     if cv2.waitKey(1) == ord('q') or not ret:
         break
