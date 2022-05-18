@@ -1,15 +1,10 @@
-from turtle import right
 import cv2
-import time
 import numpy as np
 
 webcam = False
-WIDTH = None
-HEIGHT = None
-NUM_FEATURES = 100
-BOXCOLOR = (255, 0, 255)
-BOXTHICKNESS = 1
-sift = cv2.SIFT_create(NUM_FEATURES)
+NUM_FEATURES = 80
+
+sift = cv2.SIFT_create(NUM_FEATURES, 6, 0.1)
 
 
 if webcam:
@@ -72,3 +67,6 @@ while video.isOpened():
 
     if cv2.waitKey(1) == ord('q') or not ret:
         break
+
+video.release()
+cv2.destroyAllWindows()
