@@ -34,15 +34,18 @@ print(f"Found boxes: {len(contours)}")
 trackers = cv2.legacy.MultiTracker_create()
 
 previous_boxes = []
+previous_boxes_len = 0
 
 for c, s in zip(contours, hierarchies[0]):
     x,y,w,h = cv2.boundingRect(c)
     if w > 40 and h > 5 and w < int(WIDTH/10) and h < int(HEIGHT/10) and s[3] == -1:
-        previous_boxes.append((x,y,w,h))
+        previous_boxes.append({"box": (x,y,w,h), "diff": 0})
         cv2.rectangle(frame, (x, y), (x + w, y + h), (255,0,0), 2)
         tracker = cv2.legacy.TrackerMedianFlow_create()
         trackers.add(tracker, frame, (x,y,w,h))
-print(f"Drawn bboxes: {len(previous_boxes)}")
+
+previous_boxes_len = len(previous_boxes)
+print(f"Drawn bboxes: {previous_boxes_len}")
 
 # Displaying the image
 cv2.imshow("Video", frame)
@@ -74,22 +77,41 @@ while video.isOpened():
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255,0,0), 2)
 
     (success, boxes) = trackers.update(frame)
+
+    avg_diff = 0
     for idx, box in enumerate(boxes):
         (x, y, w, h) = [int(v) for v in box]
-        """
-        TODO: get the average difference and see if the offset is greater than the average
-        """
-        print(f"[{previous_boxes[idx]}] - [{box}], box diff: {box_diff(previous_boxes[idx], box)}")
-        if(box_diff(previous_boxes[idx], box) > 2):
+        b_diff = box_diff(previous_boxes[idx]['box'], box)
+        previous_boxes[idx]['diff'] = b_diff
+        avg_diff += b_diff
+        print(f"[{previous_boxes[idx]['box']}] - [{box}], box diff: {b_diff}")
+        previous_boxes[idx]['box'] = box
+        
+    avg_diff = avg_diff/previous_boxes_len
+
+    print(f"the avg difference is: {avg_diff}")
+
+    culprit_ids = []
+    # detect boxes that have changed shape too fast
+    for idx, pbox in enumerate(previous_boxes):
+        (x, y, w, h) = [int(v) for v in pbox['box']]
+        if(pbox['diff'] > 6 and pbox['diff'] > (avg_diff * 1.5)):
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
+            culprit_ids.append(idx)
         else:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
-    
-    
-    previous_boxes = boxes
 
     # Displaying the image
     cv2.imshow("Video", frame)
+
+    if len(culprit_ids) > 0:
+        cv2.waitKey(0)
+        # remove illegal boxes from tracking
+        trackers = cv2.legacy.MultiTracker_create()
+        previous_boxes = list(filter(lambda p_box: (p_box['diff'] <= 6 or p_box['diff'] <= (avg_diff * 1.5)), previous_boxes))
+        for p_box in previous_boxes:
+            tracker = cv2.legacy.TrackerMedianFlow_create()
+            trackers.add(tracker, frame, p_box['box'])
 
     prev_dilated_edges.append(frame)
 
