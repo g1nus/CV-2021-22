@@ -1,9 +1,12 @@
 import cv2
-import numpy as np
+
+"""
+TODO: create a history of stats
+"""
 
 alpha = 0.7
 webcam = False
-sift = True
+sift = False
 NUM_FEATURES = 80
 
 n_frames = 0
@@ -31,6 +34,13 @@ cv2.resizeWindow("Video", int(WIDTH/5 * 1.06), int(HEIGHT/5 * 1.06))
 FUNCTIONS
 """
 
+def saveFrame(frame, info):
+    global sift
+    if sift:
+        cv2.imwrite(f'output/frame{n_frames}_{info}_sift.jpg', frame)
+    else:
+        cv2.imwrite(f'output/frame{n_frames}_{info}_orb.jpg', frame)
+
 # gets a frame in the resized ratio
 def getResizedFrame(video, ratio):
     global n_frames
@@ -50,6 +60,7 @@ def detectKeypoints(frame):
     #detect keypoints and draw them on screen
     kps, dsc = detector.detectAndCompute(work_frame, None)
     work_frame = cv2.drawKeypoints(gray_frame, kps, work_frame, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    saveFrame(work_frame, 'keypoints')
     corners_predicted = cv2.KeyPoint.convert(kps)
     return work_frame, corners_predicted
 
@@ -85,6 +96,10 @@ def getLoss(corners_predicted):
     loss_points["total"] = loss_points["right"] + loss_points["left"] + loss_points["top"] + loss_points["bottom"]
     return loss_points
 
+def saveFrameWithKeypoints(frame):
+    f = frame.copy()
+    nf, _ = detectKeypoints(f)
+
 """
 MAIN CODE
 """
@@ -112,6 +127,15 @@ while video.isOpened():
         _, corners_predicted = detectKeypoints(clear_frame)
 
     print(f"nth_frame: {n_frames} | loss: {loss_points['total']}")
+
+    if(n_frames == 220):
+        saveFrame(clear_frame, 'clear')
+        saveFrame(work_frame, 'work')
+        saveFrameWithKeypoints(clear_frame)
+    elif(n_frames == 100):
+        saveFrame(clear_frame, 'clear')
+        saveFrame(work_frame, 'work')
+        saveFrameWithKeypoints(clear_frame)
 
     # Displaying the image
     cv2.imshow("Video", work_frame)
