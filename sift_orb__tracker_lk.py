@@ -1,8 +1,9 @@
 import cv2
 import numpy as np
 
+alpha = 0.7
 webcam = False
-sift = False
+sift = True
 NUM_FEATURES = 80
 
 n_frames = 0
@@ -54,12 +55,15 @@ def detectKeypoints(frame):
 
 # draws circles over the predicted corners
 def drawCircleCorners(frame, corners_predicted, radius, colour, thickness):
+    global alpha
     work_frame = frame.copy()
+    overlay = frame.copy()
     for item in corners_predicted.astype(int):
         x, y = item
         x = int(x)
         y = int(y)
-        cv2.circle(work_frame, (x, y), radius, colour, thickness)
+        cv2.circle(overlay, (x, y), radius, colour, thickness)
+    work_frame = cv2.addWeighted(overlay, alpha, work_frame, 1 - alpha, 0)
     return work_frame
 
 # returns details regarding how many corners are lost
@@ -100,7 +104,7 @@ while video.isOpened():
     # read the next frame and predict the new position of the corners
     clear_frame = getResizedFrame(video, 5)
     corners_predicted, status_predicted, err = cv2.calcOpticalFlowPyrLK(prev_frame, clear_frame, prev_corners, None)
-    work_frame = drawCircleCorners(clear_frame, corners_predicted, 6, (0, 255, 0), 1)
+    work_frame = drawCircleCorners(clear_frame, corners_predicted, 6, (0, 255, 0), 2)
 
     # check the lost corners and, in case, detect new keypoints
     loss_points = getLoss(corners_predicted)
