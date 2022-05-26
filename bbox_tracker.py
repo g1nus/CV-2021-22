@@ -45,6 +45,7 @@ for c, s in zip(contours, hierarchies[0]):
         trackers.add(tracker, frame, (x,y,w,h))
 
 previous_boxes_len = len(previous_boxes)
+original_box_len = previous_boxes_len
 print(f"Drawn bboxes: {previous_boxes_len}")
 
 # Displaying the image
@@ -69,12 +70,12 @@ while video.isOpened():
     #            break
     #        shown_frame = cv2.addWeighted(shown_frame, 0.8, prev_f, 0.8, 0)
 
-    contours, hierarchies = cv2.findContours(thresh_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    #contours, hierarchies = cv2.findContours(thresh_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     #print(hierarchies)
-    for c, s in zip(contours, hierarchies[0]):
-        x,y,w,h = cv2.boundingRect(c)
-        if w > 40 and h > 5 and w < int(WIDTH/10) and h < int(HEIGHT/10) and s[3] == -1:
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255,0,0), 2)
+    #for c, s in zip(contours, hierarchies[0]):
+    #    x,y,w,h = cv2.boundingRect(c)
+    #    if w > 40 and h > 5 and w < int(WIDTH/10) and h < int(HEIGHT/10) and s[3] == -1:
+    #        cv2.rectangle(frame, (x, y), (x + w, y + h), (255,0,0), 2)
 
     (success, boxes) = trackers.update(frame)
 
@@ -105,13 +106,28 @@ while video.isOpened():
     cv2.imshow("Video", frame)
 
     if len(culprit_ids) > 0:
-        cv2.waitKey(0)
-        # remove illegal boxes from tracking
-        trackers = cv2.legacy.MultiTracker_create()
-        previous_boxes = list(filter(lambda p_box: (p_box['diff'] <= 6 or p_box['diff'] <= (avg_diff * 1.5)), previous_boxes))
-        for p_box in previous_boxes:
-            tracker = cv2.legacy.TrackerMedianFlow_create()
-            trackers.add(tracker, frame, p_box['box'])
+        if((len(previous_boxes) - len(culprit_ids)) < original_box_len/2):
+            trackers = cv2.legacy.MultiTracker_create()
+            contours, hierarchies = cv2.findContours(thresh_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            previous_boxes = []
+            previous_boxes_len = 0
+            for c, s in zip(contours, hierarchies[0]):
+                x,y,w,h = cv2.boundingRect(c)
+                if w > 40 and h > 5 and w < int(WIDTH/10) and h < int(HEIGHT/10) and s[3] == -1:
+                    previous_boxes.append({"box": (x,y,w,h), "diff": 0})
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255,0,0), 2)
+                    tracker = cv2.legacy.TrackerMedianFlow_create()
+                    trackers.add(tracker, frame, (x,y,w,h))
+            previous_boxes_len = len(previous_boxes)
+            original_box_len = previous_boxes_len
+            print(f"Drawn bboxes: {previous_boxes_len}")
+        else:
+            # remove illegal boxes from tracking
+            trackers = cv2.legacy.MultiTracker_create()
+            previous_boxes = list(filter(lambda p_box: (p_box['diff'] <= 6 or p_box['diff'] <= (avg_diff * 1.5)), previous_boxes))
+            for p_box in previous_boxes:
+                tracker = cv2.legacy.TrackerMedianFlow_create()
+                trackers.add(tracker, frame, p_box['box'])
 
     prev_dilated_edges.append(frame)
 
