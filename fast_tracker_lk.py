@@ -1,11 +1,8 @@
 import cv2
-import numpy as np
-
-"""
-TODO: tweak the kp predicted (line 23: fast initialization) an maybe refractor code
-"""
 
 webcam = False
+n_frames = 0
+fast = cv2.FastFeatureDetector_create(20, True, cv2.FAST_FEATURE_DETECTOR_TYPE_5_8)
 
 if webcam:
     video = cv2.VideoCapture(0)
@@ -16,29 +13,45 @@ WIDTH = video.get(cv2.CAP_PROP_FRAME_WIDTH)
 HEIGHT = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
 print(f"{WIDTH} x {HEIGHT}")
 
-ret, frame = video.read()
-frame = cv2.resize(frame, (int(WIDTH/5), int(HEIGHT/5)))
-gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-# Applying the function
-fast = cv2.FastFeatureDetector_create(20, True, cv2.FAST_FEATURE_DETECTOR_TYPE_5_8)
-# Extract the keypoints
-kps = fast.detect(gray_frame, None)
-corners_predicted = cv2.KeyPoint.convert(kps)
-total_points = len(corners_predicted)
-print(f"=============\ntotal corners detected: {total_points}\n=============\n")
-kp_image = cv2.drawKeypoints(frame, kps, None, color=(0, 255, 0))
-# Displaying the image
-cv2.imshow("Video", kp_image)
-cv2.waitKey(0)
+"""
+FUNCTIONS
+"""
 
-while video.isOpened():
-    prev_frame = frame.copy()
-    prev_corners = corners_predicted
-
+# gets a frame in the resized ratio
+def getResizedFrame(video, ratio):
+    global n_frames
     ret, frame = video.read()
-    frame = cv2.resize(frame, (int(WIDTH/5), int(HEIGHT/5)))
+    if not ret:
+        print("no more frames to read...")
+        exit()
+    frame = cv2.resize(frame, (int(WIDTH/ratio), int(HEIGHT/ratio)))
+    n_frames += 1
+    return frame
 
-    corners_predicted, status_predicted, err = cv2.calcOpticalFlowPyrLK(prev_frame, frame, prev_corners, None)
+# detects keypoints and draws them on frame
+def detectKeypoints(frame):
+    global fast
+    work_frame = frame.copy()
+    gray_frame = cv2.cvtColor(work_frame, cv2.COLOR_BGR2GRAY)
+    #detect keypoints and draw them on screen
+    kps = fast.detect(gray_frame, None)
+    work_frame = cv2.drawKeypoints(work_frame, kps, None, color=(0, 255, 0))
+    corners_predicted = cv2.KeyPoint.convert(kps)
+    return work_frame, corners_predicted
+
+# draws circles over the predicted corners
+def drawCircleCorners(frame, corners_predicted, radius, colour, thickness):
+    work_frame = frame.copy()
+    for item in corners_predicted.astype(int):
+        x, y = item
+        x = int(x)
+        y = int(y)
+        cv2.circle(work_frame, (x, y), radius, colour, thickness)
+    return work_frame
+
+# returns details regarding how many corners are lost
+def getLoss(corners_predicted):
+    global WIDTH, HEIGHT
     loss_points = {"right": 0, "left": 0, "top": 0, "bottom": 0, "total": 0}
     for idx, item in enumerate(corners_predicted.astype(int)):
         x, y = item
@@ -52,24 +65,46 @@ while video.isOpened():
             loss_points["bottom"] += 1
         elif y < 0:
             loss_points["top"] += 1
-        cv2.circle(frame, (x, y), 6, (0, 255, 0), 1)
-    
-    cv2.imshow("Video", frame)
-
     loss_points["total"] = loss_points["right"] + loss_points["left"] + loss_points["top"] + loss_points["bottom"]
+    return loss_points
 
-    print(f"Total points lost/total : {loss_points['total']}/{total_points} (r: {loss_points['right']} - l: {loss_points['left']} - t: {loss_points['top']} - b: {loss_points['bottom']})")
+"""
+MAIN CODE
+"""
+
+# I read the first frame and get the first set of keypoints
+clear_frame = getResizedFrame(video, 5)
+work_frame, corners_predicted = detectKeypoints(clear_frame)
+total_points = len(corners_predicted)
+# Displaying the image
+cv2.imshow("Video", work_frame)
+
+while video.isOpened():
+    # I keep information about the previous processing (will be useful for the prediction)
+    prev_frame = clear_frame.copy()
+    prev_corners = corners_predicted
+
+    # read the next frame
+    clear_frame = getResizedFrame(video, 5)
+    # predict the new position only if there are detected corners
+    if(total_points > 0):
+        corners_predicted, status_predicted, err = cv2.calcOpticalFlowPyrLK(prev_frame, clear_frame, prev_corners, None)
+        work_frame = drawCircleCorners(clear_frame, corners_predicted,  6, (0, 255, 0), 1)
+        
+        # analyze how many points were lost
+        loss_points = getLoss(corners_predicted)
     
+    #if I lost too many poins I detect new corners
     if(loss_points["total"] > len(corners_predicted)/2):
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        #detect keypoints
-        kps = fast.detect(gray_frame, None)
-        corners_predicted = cv2.KeyPoint.convert(kps)
+        _, corners_predicted = detectKeypoints(clear_frame)
         total_points = len(corners_predicted)
-        print(f"=============\ntotal corners detected: {total_points}\n=============\n")
     
-
-    if cv2.waitKey(1) == ord('q') or not ret:
+    cv2.imshow("Video", work_frame)
+    if(total_points > 0):
+        print(f"nth_frame: {n_frames} | total_kp: {total_points} | loss: {round(loss_points['total']/total_points, 2)}")
+    else:
+        print(f"nth_frame: {n_frames} | ZERO corners detected")
+    if cv2.waitKey(1) == ord('q'):
         break
 
 video.release()
