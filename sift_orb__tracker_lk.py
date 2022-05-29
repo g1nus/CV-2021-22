@@ -1,16 +1,24 @@
+import time
 import cv2
+import pandas as pd
 
 """
 TODO: create a history of stats
+        - total of overlapping points               <========!!!!
+        - overlap feature points of the 3 detectors
 """
 
 alpha = 0.7
 webcam = False
-sift = False
+sift = True
 NUM_FEATURES = 80
 
 n_frames = 0
+last_frame_update = 0
 detector = None
+
+data_hist = {'frame' : [], 'last_frame_update': [], 'corners': [], 'time': []}
+
 if sift:
     detector = cv2.SIFT_create(NUM_FEATURES, 6, 0.1)
 else:
@@ -34,6 +42,12 @@ cv2.resizeWindow("Video", int(WIDTH/5 * 1.06), int(HEIGHT/5 * 1.06))
 FUNCTIONS
 """
 
+def saveData():
+    data_hist['time'][len(data_hist['time']) - 1] = time.time()
+    df = pd.DataFrame(data_hist)
+    print(df)
+    df.to_csv(f'output/{"SIFT" if sift else "ORB"}.csv', index = False, header = True)
+
 def saveFrame(frame, info):
     global sift
     if sift:
@@ -47,6 +61,7 @@ def getResizedFrame(video, ratio):
     ret, frame = video.read()
     if not ret:
         print("no more frames to read...")
+        saveData()
         exit()
     frame = cv2.resize(frame, (int(WIDTH/ratio), int(HEIGHT/ratio)))
     n_frames += 1
@@ -54,7 +69,7 @@ def getResizedFrame(video, ratio):
 
 # detects keypoints and draws them on frame
 def detectKeypoints(frame):
-    global detector
+    global detector, last_frame_update
     work_frame = frame.copy()
     gray_frame = cv2.cvtColor(work_frame, cv2.COLOR_BGR2GRAY)
     #detect keypoints and draw them on screen
@@ -62,6 +77,8 @@ def detectKeypoints(frame):
     work_frame = cv2.drawKeypoints(gray_frame, kps, work_frame, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     saveFrame(work_frame, 'keypoints')
     corners_predicted = cv2.KeyPoint.convert(kps)
+
+    last_frame_update = n_frames
     return work_frame, corners_predicted
 
 # draws circles over the predicted corners
@@ -100,6 +117,16 @@ def saveFrameWithKeypoints(frame):
     f = frame.copy()
     nf, _ = detectKeypoints(f)
 
+def appendHistoryData(corners):
+    global last_frame_update, n_frames
+    data_hist['frame'].append(n_frames)
+    data_hist['last_frame_update'].append(last_frame_update)
+    data_hist['corners'].append(corners)
+    if n_frames == 1:
+        data_hist['time'].append(time.time())
+    else:
+        data_hist['time'].append(data_hist['time'][len(data_hist['time']) - 1])
+
 """
 MAIN CODE
 """
@@ -108,6 +135,7 @@ MAIN CODE
 clear_frame = getResizedFrame(video, 5)
 work_frame, corners_predicted = detectKeypoints(clear_frame)
 print(f"initially detected: {len(corners_predicted)}")
+appendHistoryData(len(corners_predicted))
 # Displaying the image
 cv2.imshow("Video", work_frame)
 
@@ -128,19 +156,26 @@ while video.isOpened():
 
     print(f"nth_frame: {n_frames} | loss: {loss_points['total']}")
 
+    appendHistoryData(len(corners_predicted) - loss_points['total'])
+
     if(n_frames == 220):
         saveFrame(clear_frame, 'clear')
         saveFrame(work_frame, 'work')
-        saveFrameWithKeypoints(clear_frame)
+        #saveFrameWithKeypoints(clear_frame)
     elif(n_frames == 100):
         saveFrame(clear_frame, 'clear')
         saveFrame(work_frame, 'work')
-        saveFrameWithKeypoints(clear_frame)
+        #saveFrameWithKeypoints(clear_frame)
 
     # Displaying the image
     cv2.imshow("Video", work_frame)
     if cv2.waitKey(1) == ord('q'):
         break
 
+"""
+Cleanup and close
+"""
+
+saveData()
 video.release()
 cv2.destroyAllWindows()
