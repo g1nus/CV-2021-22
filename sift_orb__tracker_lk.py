@@ -2,22 +2,16 @@ import time
 import cv2
 import pandas as pd
 
-"""
-TODO: create a history of stats
-        - total of overlapping points               <========!!!!
-        - overlap feature points of the 3 detectors
-"""
-
 alpha = 0.7
 webcam = False
-sift = True
+sift = False
 NUM_FEATURES = 80
 
 n_frames = 0
 last_frame_update = 0
 detector = None
 
-data_hist = {'frame' : [], 'last_frame_update': [], 'corners': [], 'time': []}
+data_hist = {'frame' : [], 'last_frame_update': [], 'corners': [], 'clusters': [], 'time': []}
 
 if sift:
     detector = cv2.SIFT_create(NUM_FEATURES, 6, 0.1)
@@ -97,6 +91,7 @@ def drawCircleCorners(frame, corners_predicted, radius, colour, thickness):
 # returns details regarding how many corners are lost
 def getLoss(corners_predicted):
     global WIDTH, HEIGHT
+    legal_points = list()
     loss_points = {"right": 0, "left": 0, "top": 0, "bottom": 0, "total": 0}
     for idx, item in enumerate(corners_predicted.astype(int)):
         x, y = item
@@ -110,18 +105,54 @@ def getLoss(corners_predicted):
             loss_points["bottom"] += 1
         elif y < 0:
             loss_points["top"] += 1
+        else:
+            legal_points.append((x,y))
     loss_points["total"] = loss_points["right"] + loss_points["left"] + loss_points["top"] + loss_points["bottom"]
-    return loss_points
+    return loss_points, legal_points
+
+def getAggregatePoints(legal_points, clusters):
+    x, y = legal_points.pop(0)
+    #print(f"{legal_points}\n===============================\npicked point = {(x, y)} | total len({len(legal_points)})")
+    #close_ones = list(filter(lambda item: (item[0] != x or item[1] != y) and item[0] >= x - 10 and item[0] <= x + 10 and item[1] >= y - 10 and item[1] <= y + 10, legal_points))
+    close_ones = list(filter(lambda item: item[0] >= x - 10 and item[0] <= x + 10 and item[1] >= y - 10 and item[1] <= y + 10, legal_points))
+    clusters.append([(x, y)])
+    clusters[len(clusters) - 1].extend(close_ones)
+    #print(f"close ones are {clusters[len(clusters) - 1]} | {(x,y) not in clusters[len(clusters) - 1]}")
+    legal_points = [p for p in legal_points if p not in clusters[len(clusters) - 1]]
+
+    new_points_found = True
+    extra_points = list()
+    while new_points_found:
+        for point in clusters[len(clusters) - 1]:
+            x, y = point
+            extra_points.extend(list(filter(lambda item: (item[0] != x or item[1] != y) and item[0] >= x - 10 and item[0] <= x + 10 and item[1] >= y - 10 and item[1] <= y + 10, legal_points)))
+            legal_points = [p for p in legal_points if p not in extra_points]
+
+        if(len(extra_points) > 0):
+            ep = list(extra_points)
+            new_points_found = True
+            clusters[len(clusters) - 1].extend(ep)
+            legal_points = [x for x in legal_points if x not in clusters[len(clusters) - 1]]
+            extra_points = []
+        else:
+            new_points_found = False
+
+    return legal_points, clusters
+    
+    
+            
+        
 
 def saveFrameWithKeypoints(frame):
     f = frame.copy()
     nf, _ = detectKeypoints(f)
 
-def appendHistoryData(corners):
+def appendHistoryData(corners, clusters):
     global last_frame_update, n_frames
     data_hist['frame'].append(n_frames)
     data_hist['last_frame_update'].append(last_frame_update)
     data_hist['corners'].append(corners)
+    data_hist['clusters'].append(clusters)
     if n_frames == 1:
         data_hist['time'].append(time.time())
     else:
@@ -135,7 +166,7 @@ MAIN CODE
 clear_frame = getResizedFrame(video, 5)
 work_frame, corners_predicted = detectKeypoints(clear_frame)
 print(f"initially detected: {len(corners_predicted)}")
-appendHistoryData(len(corners_predicted))
+appendHistoryData(len(corners_predicted), 0)
 # Displaying the image
 cv2.imshow("Video", work_frame)
 
@@ -150,13 +181,18 @@ while video.isOpened():
     work_frame = drawCircleCorners(clear_frame, corners_predicted, 6, (0, 255, 0), 2)
 
     # check the lost corners and, in case, detect new keypoints
-    loss_points = getLoss(corners_predicted)
+    loss_points, legal_points = getLoss(corners_predicted)
     if(loss_points["total"] > len(corners_predicted)/2):
         _, corners_predicted = detectKeypoints(clear_frame)
 
-    print(f"nth_frame: {n_frames} | loss: {loss_points['total']}")
 
-    appendHistoryData(len(corners_predicted) - loss_points['total'])
+    clusters = list()
+    while(len(legal_points) > 0):
+        legal_points, clusters = getAggregatePoints(legal_points, clusters)
+    
+    print(f"nth_frame: {n_frames} | loss: {loss_points['total']} | legal_points: {len(corners_predicted) - loss_points['total']} | clusters = {len(clusters)}")
+
+    appendHistoryData(len(corners_predicted) - loss_points['total'], len(clusters))
 
     if(n_frames == 220):
         saveFrame(clear_frame, 'clear')

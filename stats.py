@@ -1,7 +1,7 @@
 #%%
 import pandas as pd
 import numpy as np
-import matplotlib
+import matplotlib.pyplot as plt
 
 orb_df = pd.read_csv('output/ORB.csv')
 sift_df = pd.read_csv('output/SIFT.csv')
@@ -14,11 +14,12 @@ def analyzeDf(name, df):
     print(f"execution time took: {int(execution_time)}sec")
     intervals = [(v if i == 0 else v - kp_updates[i - 1]) for i, v in enumerate(kp_updates)]
     print(f"there were {len(kp_updates)} keypoints updates, on average every {round(np.mean(intervals), 2)} frames :\n{kp_updates}")
-    df.plot(x="frame", y="corners")
+    plt.plot(df['corners'])
+    plt.plot(df['clusters'])
 
 
 
-analyzeDf("ORB", orb_df)
+analyzeDf("ORB", orb_df.tail(orb_df.shape[0] -1))
 # %%
-analyzeDf("SIFT", sift_df)
+analyzeDf("SIFT", sift_df.tail(sift_df.shape[0] -1))
 # %%
