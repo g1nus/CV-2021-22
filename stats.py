@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 orb_df = pd.read_csv('output/ORB.csv')
 sift_df = pd.read_csv('output/SIFT.csv')
+fast_df = pd.read_csv('output/FAST.csv')
 
 def analyzeDf(name, df):
     print(f"{name} analysis ================")
@@ -23,3 +24,4 @@ analyzeDf("ORB", orb_df.tail(orb_df.shape[0] -1))
 # %%
 analyzeDf("SIFT", sift_df.tail(sift_df.shape[0] -1))
 # %%
+analyzeDf("FAST", fast_df.tail(fast_df.shape[0] -1))
