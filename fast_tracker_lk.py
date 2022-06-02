@@ -53,8 +53,9 @@ def detectKeypoints(frame):
     global fast, last_frame_update
     work_frame = frame.copy()
     gray_frame = cv2.cvtColor(work_frame, cv2.COLOR_BGR2GRAY)
+    equ_frame = cv2.equalizeHist(gray_frame)
     #detect keypoints and draw them on screen
-    kps = fast.detect(gray_frame, None)
+    kps = fast.detect(equ_frame, None)
     work_frame = cv2.drawKeypoints(work_frame, kps, None, color=(0, 255, 0))
     saveFrame(work_frame, 'keypoints')
     corners_predicted = cv2.KeyPoint.convert(kps)
@@ -180,7 +181,7 @@ while video.isOpened():
             legal_points, clusters = getAggregatePoints(legal_points, clusters)
     
     #if I lost too many poins I detect new corners
-    if(loss_points["total"] > len(corners_predicted)/2):
+    if(loss_points["total"] > len(corners_predicted)/2) or (total_points < 10 and (n_frames - last_frame_update) > 10):
         _, corners_predicted = detectKeypoints(clear_frame)
         total_points = len(corners_predicted)
     
@@ -195,7 +196,7 @@ while video.isOpened():
 
     cv2.imshow("Video", work_frame)
     if(total_points > 0):
-        print(f"nth_frame: {n_frames} | total_kp: {total_points} | loss: {round(loss_points['total']/total_points, 2)} | clusters: {len(clusters)}")
+        print(f"nth_frame: {n_frames} ({n_frames - last_frame_update}) | total_kp: {total_points} | loss: {round(loss_points['total']/total_points, 2)} | clusters: {len(clusters)}")
         appendHistoryData(total_legal_points, len(clusters))
     else:
         print(f"nth_frame: {n_frames} | ZERO corners detected | clusters: {len(clusters)}")

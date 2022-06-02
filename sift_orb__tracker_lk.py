@@ -4,7 +4,7 @@ import pandas as pd
 
 alpha = 0.7
 webcam = False
-sift = False
+sift = True
 NUM_FEATURES = 80
 
 n_frames = 0
@@ -14,7 +14,7 @@ detector = None
 data_hist = {'frame' : [], 'last_frame_update': [], 'corners': [], 'clusters': [], 'time': []}
 
 if sift:
-    detector = cv2.SIFT_create(NUM_FEATURES, 6, 0.1)
+    detector = cv2.SIFT_create(NUM_FEATURES, 3, 0.09)
 else:
     detector = cv2.ORB_create(NUM_FEATURES)
 
@@ -65,10 +65,11 @@ def getResizedFrame(video, ratio):
 def detectKeypoints(frame):
     global detector, last_frame_update
     work_frame = frame.copy()
-    gray_frame = cv2.cvtColor(work_frame, cv2.COLOR_BGR2GRAY)
     #detect keypoints and draw them on screen
-    kps, dsc = detector.detectAndCompute(work_frame, None)
-    work_frame = cv2.drawKeypoints(gray_frame, kps, work_frame, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    gray_frame = cv2.cvtColor(work_frame, cv2.COLOR_BGR2GRAY)
+    equ_frame = cv2.equalizeHist(gray_frame)
+    kps, dsc = detector.detectAndCompute(equ_frame, None)
+    work_frame = cv2.drawKeypoints(work_frame, kps, work_frame, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     saveFrame(work_frame, 'keypoints')
     corners_predicted = cv2.KeyPoint.convert(kps)
 
