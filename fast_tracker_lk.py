@@ -63,6 +63,20 @@ def detectKeypoints(frame):
     last_frame_update = n_frames
     return work_frame, corners_predicted
 
+# detects keypoints and draws them on frame
+def detectKeypointsToSave(frame):
+    global fast
+    work_frame = frame.copy()
+    gray_frame = cv2.cvtColor(work_frame, cv2.COLOR_BGR2GRAY)
+    equ_frame = cv2.equalizeHist(gray_frame)
+    #detect keypoints and draw them on screen
+    kps = fast.detect(equ_frame, None)
+    work_frame = cv2.drawKeypoints(work_frame, kps, None, color=(0, 255, 0))
+    saveFrame(work_frame, 'screen_keypoints')
+    corners_predicted = cv2.KeyPoint.convert(kps)
+
+    return work_frame, corners_predicted
+
 # draws circles over the predicted corners
 def drawCircleCorners(frame, corners_predicted, radius, colour, thickness):
     global alpha
@@ -130,7 +144,7 @@ def getAggregatePoints(legal_points, clusters):
 
 def saveFrameWithKeypoints(frame):
     f = frame.copy()
-    nf, _ = detectKeypoints(f)
+    nf, _ = detectKeypointsToSave(f)
 
 def appendHistoryData(corners, clusters):
     if(corners < 0):
@@ -157,6 +171,13 @@ total_points = len(corners_predicted)
 appendHistoryData(total_points, 0)
 # Displaying the image
 cv2.imshow("Video", work_frame)
+
+size = (int(video.get(cv2.CAP_PROP_FRAME_WIDTH)/5),
+        int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)/5))
+fps = 28
+fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v') # note the lower case
+vout = cv2.VideoWriter()
+success = vout.open('output_fast.mp4',fourcc,fps,size,True) 
 
 while video.isOpened():
     # I keep information about the previous processing (will be useful for the prediction)
@@ -185,16 +206,13 @@ while video.isOpened():
         _, corners_predicted = detectKeypoints(clear_frame)
         total_points = len(corners_predicted)
     
-    if(n_frames == 220):
-        saveFrame(clear_frame, 'clear')
-        saveFrame(work_frame, 'work')
-        #saveFrameWithKeypoints(clear_frame)
-    elif(n_frames == 100):
-        saveFrame(clear_frame, 'clear')
-        saveFrame(work_frame, 'work')
-        #saveFrameWithKeypoints(clear_frame)
+    if(n_frames == 220 or n_frames == 100 or n_frames == 440):
+        saveFrame(clear_frame, 'screen_clear')
+        saveFrame(work_frame, 'screen_work')
+        saveFrameWithKeypoints(clear_frame)
 
     cv2.imshow("Video", work_frame)
+    vout.write(work_frame)
     if(total_points > 0):
         print(f"nth_frame: {n_frames} ({n_frames - last_frame_update}) | total_kp: {total_points} | loss: {round(loss_points['total']/total_points, 2)} | clusters: {len(clusters)}")
         appendHistoryData(total_legal_points, len(clusters))
@@ -206,4 +224,5 @@ while video.isOpened():
 
 saveData()
 video.release()
+vout.release()
 cv2.destroyAllWindows()

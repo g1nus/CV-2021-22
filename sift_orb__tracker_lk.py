@@ -16,7 +16,7 @@ data_hist = {'frame' : [], 'last_frame_update': [], 'corners': [], 'clusters': [
 if sift:
     detector = cv2.SIFT_create(NUM_FEATURES, 3, 0.09)
 else:
-    detector = cv2.ORB_create(NUM_FEATURES)
+    detector = cv2.ORB_create(NUM_FEATURES, scaleFactor=1.9, nlevels=10, fastThreshold=30)
 
 if webcam:
     video = cv2.VideoCapture(0)
@@ -74,6 +74,20 @@ def detectKeypoints(frame):
     corners_predicted = cv2.KeyPoint.convert(kps)
 
     last_frame_update = n_frames
+    return work_frame, corners_predicted
+
+# detects keypoints and draws them on frame
+def detectKeypointsToSave(frame):
+    global fast
+    work_frame = frame.copy()
+    gray_frame = cv2.cvtColor(work_frame, cv2.COLOR_BGR2GRAY)
+    equ_frame = cv2.equalizeHist(gray_frame)
+    #detect keypoints and draw them on screen
+    kps, dsc = detector.detectAndCompute(equ_frame, None)
+    work_frame = cv2.drawKeypoints(work_frame, kps, work_frame, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    saveFrame(work_frame, 'screen_keypoints')
+    corners_predicted = cv2.KeyPoint.convert(kps)
+
     return work_frame, corners_predicted
 
 # draws circles over the predicted corners
@@ -146,7 +160,7 @@ def getAggregatePoints(legal_points, clusters):
 
 def saveFrameWithKeypoints(frame):
     f = frame.copy()
-    nf, _ = detectKeypoints(f)
+    nf, _ = detectKeypointsToSave(f)
 
 def appendHistoryData(corners, clusters):
     global last_frame_update, n_frames
@@ -170,6 +184,13 @@ print(f"initially detected: {len(corners_predicted)}")
 appendHistoryData(len(corners_predicted), 0)
 # Displaying the image
 cv2.imshow("Video", work_frame)
+
+size = (int(video.get(cv2.CAP_PROP_FRAME_WIDTH)/5),
+        int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)/5))
+fps = 28
+fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v') # note the lower case
+vout = cv2.VideoWriter()
+success = vout.open(f'output_{"sift" if sift else "orb"}.mp4',fourcc,fps,size,True) 
 
 while video.isOpened():
     # I keep information about the previous processing (will be useful for the prediction)
@@ -195,17 +216,15 @@ while video.isOpened():
 
     appendHistoryData(len(corners_predicted) - loss_points['total'], len(clusters))
 
-    if(n_frames == 220):
+    if(n_frames == 220 or n_frames == 100 or n_frames == 440):
         saveFrame(clear_frame, 'clear')
         saveFrame(work_frame, 'work')
-        #saveFrameWithKeypoints(clear_frame)
-    elif(n_frames == 100):
-        saveFrame(clear_frame, 'clear')
-        saveFrame(work_frame, 'work')
-        #saveFrameWithKeypoints(clear_frame)
-
+        saveFrameWithKeypoints(clear_frame)
+    if(n_frames > 260 and n_frames < 270):
+        saveFrame(work_frame, 'change')
     # Displaying the image
     cv2.imshow("Video", work_frame)
+    vout.write(work_frame)
     if cv2.waitKey(1) == ord('q'):
         break
 
@@ -215,4 +234,5 @@ Cleanup and close
 
 saveData()
 video.release()
+vout.release()
 cv2.destroyAllWindows()
